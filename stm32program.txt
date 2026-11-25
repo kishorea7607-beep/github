@@ -1,0 +1,63 @@
+#include "main.h"
+
+SPI_HandleTypeDef hspi1;
+ADC_HandleTypeDef hadc1;
+
+uint8_t data[4];
+
+float temperature;
+float humidity;
+
+uint32_t soil;
+
+int main(void)
+{
+    HAL_Init();
+
+    SystemClock_Config();
+
+    MX_GPIO_Init();
+    MX_SPI1_Init();
+    MX_ADC1_Init();
+
+    while(1)
+    {
+        // Read Temperature using SPI
+
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); //MAKES PA4 LOWER|SELECTS SPI FOR COMMUNICATION|THIUS PIN ACTS AS CHIP SELECT
+
+        HAL_SPI_Receive(&hspi1, data, 4, 100);//RECEIVES 4 BYTES OF DATA FROM TEMP SENSOR|'100'REPRESENTS TE TIMEOUT IN MILLISECONDS
+
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);//MAKES PA4 HIGH | DESELECTS THE SPI SENSOES
+
+        uint32_t value = (data[0]<<24) | (data[1]<<16) | (data[2]<<8) | data[3]; // THE SENSOR SENDS DATA IN 4 SEPARATE BYTEES | '<<' AND '|'THIS OPERATORS COMBINE 4BYTES INTO 32-BIT 
+
+        temperature = (value >> 18) & 0x3FFF; // '>>' SHIFTS THE BITS 18 POSITIONS TO RIGHT.& 0X3FFF EXTRACTS 14-BIT TEMPARATURE FIELD
+        temperature = temperature * 0.25; //*0.25CONVERTS RAW TEMPARATURE INTO DEGREE VALUES
+
+
+        // Read Soil Moisture using ADC
+
+        HAL_ADC_Start(&hadc1); //STARTS ADC CONVERSION
+
+        HAL_ADC_PollForConversion(&hadc1, 100);//WAITS FOR ADC CONVERSION COMPLETION
+
+        soil = HAL_ADC_GetValue(&hadc1);// READS SOIL MOISTURE VALUE
+
+        HAL_ADC_Stop(&hadc1); //STOPS ADC CONVERSION
+
+
+        // Water Pump Control
+
+        if(soil > 2500) //CHECKS THE SOIL MOISTURE IS GREATER THAN 2500
+        {
+            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);//ON
+        }
+        else
+        {
+            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET);//OFF
+        }
+
+        HAL_Delay(1000);
+    }
+}
